@@ -49,6 +49,7 @@ All important application data is stored in a local SQLite database so the data 
 ## Advanced Topics Used
 
 ### 1. GUI
+
 The application uses Java Swing to build the graphical user interface. The interface includes:
 - buttons
 - labels
@@ -61,15 +62,44 @@ The application uses Java Swing to build the graphical user interface. The inter
 - sliders
 
 ### 2. Database
+
 The application uses SQLite with JDBC for permanent local data storage. Instead of storing everything only in memory, the program saves information into a database file so the library remains available after restarting the app.
 
+The database stores the main structure of the program, including:
+- songs
+- favorites
+- play history
+- playlists
+- playlist-song relationships
+- app settings such as last opened playlist and last volume
+
+This means the application does not start as a brand new empty program every time it is opened. When the code runs, it connects to the existing SQLite database file, reads the previously saved data, and restores the library state from the last time the user used the app.
+
+For example, after reopening the program, the user can still see:
+- previously added songs
+- saved playlists
+- favorite songs
+- play history
+- the last opened playlist
+- the last saved volume setting
+
+The database is also used during normal program actions, such as:
+- adding one song manually
+- scanning a folder to import songs
+- loading the music library at startup
+- saving and loading playlists
+- recording play history when songs are played
+- restoring saved settings after reopening the app
+
+Using SQLite makes the project more practical because the music library and user data remain available between sessions instead of being lost whenever the program closes.
+
 ### 3. Multithreading
+
 The project uses multithreading to keep the GUI responsive while time-consuming tasks run in the background.
 
 #### Folder Scanning Thread
-When the user clicks **Scan Folder**, the program may need to search through many files and subfolders.  
-If this task were done on the main GUI thread, the window could freeze until scanning finished.  
-To avoid that, the program creates a background thread to scan the folder separately.
+
+When the user clicks **Scan Folder**, the program may need to search through many files and subfolders. If this task were done on the main GUI thread, the window could freeze until scanning finished. To avoid that, the program creates a background thread to scan the folder separately.
 
 This means:
 - the user interface stays responsive
@@ -79,245 +109,17 @@ This means:
 After the scan finishes, the GUI is updated with the newly imported songs.
 
 #### Playback Progress Update Thread
+
 While a song is playing, the program continuously updates:
 - the progress bar
 - the current playback time
 - the total time display
 
-This is done in a separate background thread that checks the clip position repeatedly while the song is playing.  
-Without this thread, the progress bar and timer would not update smoothly during playback.
+This is done in a separate background thread that checks the clip position repeatedly while the song is playing. Without this thread, the progress bar and timer would not update smoothly during playback.
 
 #### Why Multithreading Is Important Here
-Multithreading is important in this project because the application is interactive and GUI-based.  
-The main Swing interface should remain responsive while background work is happening.  
-By moving long-running tasks and repeated updates into separate threads, the program provides a smoother user experience and demonstrates practical use of multithreading in a desktop application.
 
-## Database Design and How It Works
-
-The database is one of the most important parts of this project. The program uses a local SQLite database file named:
-
-```text
-musicplayer.db
-```
-
-This file is created automatically when the program starts for the first time.
-
-The database connection and table creation are handled in `DBHelper.java`.
-
-### Database Tables
-
-The application uses several tables.
-
-#### 1. `songs`
-
-This table stores the main music library.
-
-Columns:
-
-- `id` = unique song ID
-- `title` = song title
-- `artist` = artist name
-- `album` = album name
-- `file_path` = full path to the song file on the computer
-- `duration` = duration in seconds
-- `is_favorite` = whether the song is marked as favorite
-
-This means the program does not need to rescan everything every time. Once a song is added, its information is saved in the database.
-
-#### 2. `play_history`
-
-This table stores playback history.
-
-Columns:
-
-- `id` = history record ID
-- `song_id` = the song that was played
-- `played_at` = timestamp of when the song was played
-
-Every time a song starts playing, a new history record is inserted.
-
-#### 3. `playlists`
-
-This table stores playlist names.
-
-Columns:
-
-- `id` = playlist ID
-- `name` = playlist name
-
-#### 4. `playlist_songs`
-
-This table connects songs and playlists.
-
-Columns:
-
-- `playlist_id`
-- `song_id`
-
-This is needed because:
-
-- one playlist can contain many songs
-- one song can belong to many playlists
-
-So this table works like a relationship table between the `songs` table and the `playlists` table.
-
-#### 5. `app_settings`
-
-This table stores small settings for the application.
-
-Examples:
-
-- last opened playlist
-- last volume value
-
-This allows the app to restore some state when it starts again.
-
-## How Songs Are Added to the Database
-
-There are two main ways to add songs.
-
-### 1. Add One Song
-
-The user clicks the **Add One Song** button.
-
-Then the program:
-
-1. opens a file chooser
-2. lets the user choose one file
-3. asks the user to enter:
-   - title
-   - artist
-   - album
-4. calculates duration if the file is WAV
-5. inserts the song into the `songs` table
-
-This is the more accurate method because the user can type the song information manually.
-
-### 2. Scan Folder
-
-The user clicks the **Scan Folder** button.
-
-Then the program:
-
-1. opens a folder chooser
-2. scans the chosen folder and subfolders
-3. looks for `.wav` and `.mp3` files
-4. creates song records automatically
-5. inserts them into the database
-
-For scanned songs, title usually comes from the file name, while artist and album are set to default values such as `Unknown Artist` and `Unknown Album`.
-
-This feature is faster when importing many files at once.
-
-## How the Program Prevents Duplicate Songs
-
-The `songs` table uses the `file_path` column as a unique value.
-
-This means the same file path cannot be inserted many times. If the user tries to add the same file again, SQLite ignores the duplicate entry.
-
-This helps keep the music library cleaner.
-
-## How Playlists Work in the Database
-
-When the user creates a playlist:
-
-- a new row is inserted into the `playlists` table
-
-When the user adds a song to a playlist:
-
-- the program looks up the playlist ID
-- then inserts a row into `playlist_songs`
-
-When the user opens a playlist:
-
-- the program uses a SQL join between `songs` and `playlist_songs`
-- it loads only the songs connected to that playlist
-
-When the user deletes a playlist:
-
-- rows in `playlist_songs` for that playlist are removed
-- the playlist row itself is removed from `playlists`
-
-The actual songs in the main library remain safe unless the user separately deletes a song.
-
-## How Import and Export Work
-
-The project also includes file I/O features in addition to database storage.
-
-### Export Playlist
-
-The user can export a playlist into a text file.
-
-The file format is simple and readable. The first line stores the playlist name, and the next lines store song details such as:
-
-- title
-- artist
-- album
-- file path
-- duration
-
-This allows the playlist to be saved outside the database.
-
-### Import Playlist
-
-The user can import a playlist text file.
-
-The program:
-
-1. reads the playlist name
-2. creates the playlist if needed
-3. reads each song line
-4. checks whether the song already exists in the database by file path
-5. adds the song if it does not already exist
-6. links the song to the playlist
-
-This means the database remains the main storage, while the text file acts as an import/export format.
-
-## How Music Playback Works
-
-Playback is handled in `MusicPlayerFrame.java` using Java audio classes and `Clip`.
-
-The current implementation focuses on WAV playback.
-
-When a user plays a song:
-
-1. the selected song file path is read from the database-backed song object
-2. the WAV file is opened
-3. the clip starts playing
-4. play history is inserted into the database
-5. the progress bar and time labels update while the song is playing
-
-The player also supports:
-
-- stop
-- pause/resume
-- next/previous
-- auto play next
-- click-to-seek
-
-## How Search and Filters Work
-
-The song list shown on screen can be filtered by:
-
-- search text
-- favorites only
-- playlist view
-
-The search checks:
-
-- song title
-- artist name
-
-So if the user types part of a title or artist, the list updates to show only matching songs.
-
-## How Sorting Works
-
-The user can sort the visible song list by:
-
-- title
-- artist
-
-The application sorts the loaded songs in memory before displaying them in the list.
+Multithreading is important in this project because the application is interactive and GUI-based. The main Swing interface should remain responsive while background work is happening. By moving long-running tasks and repeated updates into separate threads, the program provides a smoother user experience and demonstrates practical use of multithreading in a desktop application.
 
 ## Project Structure
 
@@ -344,10 +146,54 @@ Main files:
 - `MusicPlayerFrame.java`  
   Main GUI window. Handles user interaction, playback, filtering, playlists, dialogs, progress bar, import/export, and saved settings.
 
+## How the Code Works
+
+### Song Library
+
+Songs can be added one by one using the **Add One Song** button or in bulk using the **Scan Folder** button. The song information is stored in the SQLite database.
+
+### Music Playback
+
+The player currently supports WAV playback using Java's built-in audio support (`Clip`).
+
+Users can:
+- play songs
+- stop songs
+- pause/resume songs
+- jump to another time using the progress bar
+- move to previous or next songs
+
+### Search and Sorting
+
+The user can search songs by title or artist using the search bar. The user can also sort the visible song list by title or artist.
+
+### Favorites
+
+Songs can be marked as favorites. The interface can filter to show only favorite songs.
+
+### Playlists
+
+Users can create playlists and add songs into them. The playlist panel on the left allows users to:
+- view playlist songs
+- rename playlists
+- delete playlists
+- remove songs from playlists
+
+### Import and Export
+
+Playlists can be exported to a text file and imported back into the program later. This provides a simple file I/O feature in addition to database storage.
+
+### Saved Settings
+
+The application remembers:
+- the last opened playlist
+- the last volume slider value
+
+These settings are stored in the database and restored when the app starts again.
+
 ## Requirements
 
 To run this project, you need:
-
 - Java JDK 21
 - Eclipse IDE or another Java IDE
 - SQLite JDBC driver jar  
@@ -368,7 +214,7 @@ To run this project, you need:
 src/musicplayer/Main.java
 ```
 
-6. Right click `Main.java`
+6. Right click `Main.java`.
 7. Choose:
 
 ```text
@@ -379,30 +225,30 @@ Run As -> Java Application
 
 ### Add one song manually
 
-1. Click **Add One Song**
-2. Choose a WAV file
-3. Enter title, artist, and album
-4. The song is saved into the database and shown in the song list
+1. Click **Add One Song**.
+2. Choose a WAV file.
+3. Enter title, artist, and album.
+4. The song is saved into the database and shown in the song list.
 
 ### Import many songs
 
-1. Click **Scan Folder**
-2. Choose a folder containing music files
-3. The application scans the folder in the background
-4. Matching files are added into the database
+1. Click **Scan Folder**.
+2. Choose a folder containing music files.
+3. The application scans the folder in the background.
+4. Matching files are added into the database.
 
 ### Play music
 
-1. Select a song from the list
-2. Click **Play** or double-click the song
-3. Use pause, stop, next, previous, and progress bar click-to-seek as needed
+1. Select a song from the list.
+2. Click **Play** or double-click the song.
+3. Use pause, stop, next, previous, and progress bar click-to-seek as needed.
 
 ### Create and manage playlists
 
-1. Click **Create Playlist**
-2. Add selected songs with **Add To Playlist**
-3. Click a playlist on the left to view its songs
-4. Use rename, remove, delete, export, and import options as needed
+1. Click **Create Playlist**.
+2. Add selected songs with **Add To Playlist**.
+3. Click a playlist on the left to view its songs.
+4. Use rename, remove, delete, export, and import options as needed.
 
 ## Notes
 
