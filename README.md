@@ -64,9 +64,33 @@ The application uses Java Swing to build the graphical user interface. The inter
 The application uses SQLite with JDBC for permanent local data storage. Instead of storing everything only in memory, the program saves information into a database file so the library remains available after restarting the app.
 
 ### 3. Multithreading
-The application uses background threads in two important places:
-- folder scanning, so the GUI does not freeze while importing many files
-- progress bar updating, so playback time can update continuously while music is playing
+The project uses multithreading to keep the GUI responsive while time-consuming tasks run in the background.
+
+#### Folder Scanning Thread
+When the user clicks **Scan Folder**, the program may need to search through many files and subfolders.  
+If this task were done on the main GUI thread, the window could freeze until scanning finished.  
+To avoid that, the program creates a background thread to scan the folder separately.
+
+This means:
+- the user interface stays responsive
+- the window can still be moved or interacted with
+- large folder imports do not block the whole application
+
+After the scan finishes, the GUI is updated with the newly imported songs.
+
+#### Playback Progress Update Thread
+While a song is playing, the program continuously updates:
+- the progress bar
+- the current playback time
+- the total time display
+
+This is done in a separate background thread that checks the clip position repeatedly while the song is playing.  
+Without this thread, the progress bar and timer would not update smoothly during playback.
+
+#### Why Multithreading Is Important Here
+Multithreading is important in this project because the application is interactive and GUI-based.  
+The main Swing interface should remain responsive while background work is happening.  
+By moving long-running tasks and repeated updates into separate threads, the program provides a smoother user experience and demonstrates practical use of multithreading in a desktop application.
 
 ## Database Design and How It Works
 
